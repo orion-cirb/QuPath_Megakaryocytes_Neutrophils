@@ -1,27 +1,8 @@
-//------------------------------------------- PARAMETERS TO TUNE -----------------------------------------------------//
-// MEGAKARYOCYTES
-// Size filtering
-def megakaMinArea = 400 // in µm2
-def megakaMaxArea = 2000
-// Intensity filtering
-def megakaMinInt = 1000
-def megakaMaxInt = 20000
-
-// NEUTROPHILS
-detectNeutro = true // set to true if you want to detect neutrophils, false otherwise
-// Size filtering
-def neutroMinArea = 20
-def neutroMaxArea = 80
-// Intensity filtering
-def neutroMinInt = 2000
-def neutroMaxInt = 8000
-
-
-
 //----------------------------------------------- PIPELINE -----------------------------------------------------------//
 import qupath.lib.gui.dialogs.Dialogs
 import static qupath.lib.scripting.QP.*
 import qupath.lib.objects.classes.PathClass
+import qupath.lib.plugins.parameters.ParameterList
 import qupath.opencv.ops.ImageOps
 import qupath.ext.biop.cellpose.Cellpose2D
 import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
@@ -29,6 +10,26 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics
 
 // Init project
 def project = getProject()
+
+// Generate dialog box
+params = new ParameterList()
+params.addTitleParameter('Megakaryocytes')
+params.addIntParameter('megakaMinArea', 'Min area (µm2)', 400)
+params.addIntParameter('megakaMaxArea', 'Max area (µm2)', 2000)
+params.addIntParameter('megakaMinInt', 'Min intensity', 1000)
+params.addIntParameter('megakaMaxInt', 'Max intensity', 20000)
+params.addTitleParameter('Neutrophils')
+params.addBooleanParameter('detectNeutro', 'Detect neutrophils', true)
+params.addIntParameter('neutroMinArea', 'Min area (µm2)', 20)
+params.addIntParameter('neutroMaxArea', 'Max area (µm2)', 80)
+params.addIntParameter('neutroMinInt', 'Min intensity', 2000)
+params.addIntParameter('neutroMaxInt', 'Max intensity', 8000)
+def ok = Dialogs.showParameterDialog('Enter parameters', params)
+if(!ok) {
+    Dialogs.showErrorNotification('', 'Script canceled')
+    return
+}
+def detectNeutro = params.getBooleanParameterValue('detectNeutro')
 
 // Pixel classifier for tissue segmentation
 if (!project.getPixelClassifiers().contains('Tissue')) {
@@ -50,7 +51,7 @@ def neutroCellpose = buildCellposeModel('cyto2', 'Cy5', 20, true, neutroClass)
 
 // Create results file and write headers
 def imageDir = new File(project.getImageList()[0].getURIs()[0]).getParent()
-def resultsDir = buildFilePath(imageDir, '/Results')
+def resultsDir = buildFilePath(imageDir, '/Results ' + String.format('%tF %<tH.%<tM', java.time.LocalDateTime.now()))
 if (!fileExists(resultsDir)) mkdirs(resultsDir)
 def resultsFile = new File(buildFilePath(resultsDir, 'detailedResults.xls'))
 resultsFile.createNewFile()
@@ -100,10 +101,10 @@ for (entry in project.getImageList()) {
     selectObjects(tissues)
     megakaCellpose.detectObjects(imageData, getSelectedObjects())
     def allMegakaryocytes = getDetectionObjects().findAll {
-        it.getROI().getScaledArea(pixelWidth, pixelWidth) > megakaMinArea
-                && it.getROI().getScaledArea(pixelWidth, pixelWidth) < megakaMaxArea
-                && it.getMeasurementList().get('EGFP: Mean') > megakaMinInt
-                && it.getMeasurementList().get('EGFP: Mean') < megakaMaxInt
+        it.getROI().getScaledArea(pixelWidth, pixelWidth) > params.getIntParameterValue('megakaMinArea')
+                && it.getROI().getScaledArea(pixelWidth, pixelWidth) < params.getIntParameterValue('megakaMaxArea')
+                && it.getMeasurementList().get('EGFP: Mean') > params.getIntParameterValue('megakaMinInt')
+                && it.getMeasurementList().get('EGFP: Mean') < params.getIntParameterValue('megakaMaxInt')
     }
     allMegakaryocytes = allMegakaryocytes.collect {
         return PathObjects.createAnnotationObject(it.getROI(), it.getPathClass(), it.getMeasurementList())
@@ -118,10 +119,10 @@ for (entry in project.getImageList()) {
         selectObjects(tissues)
         neutroCellpose.detectObjects(imageData, getSelectedObjects())
         allNeutrophils = getDetectionObjects().findAll {
-            it.getROI().getScaledArea(pixelWidth, pixelWidth) > neutroMinArea
-                    && it.getROI().getScaledArea(pixelWidth, pixelWidth) < neutroMaxArea
-                    && it.getMeasurementList().get('Cy5: Mean') > neutroMinInt
-                    && it.getMeasurementList().get('Cy5: Mean') < neutroMaxInt
+            it.getROI().getScaledArea(pixelWidth, pixelWidth) > params.getIntParameterValue('neutroMinArea')
+                    && it.getROI().getScaledArea(pixelWidth, pixelWidth) < params.getIntParameterValue('neutroMaxArea')
+                    && it.getMeasurementList().get('Cy5: Mean') > params.getIntParameterValue('neutroMinInt')
+                    && it.getMeasurementList().get('Cy5: Mean') < params.getIntParameterValue('neutroMaxInt')
         }
         allNeutrophils = allNeutrophils.collect {
             return PathObjects.createAnnotationObject(it.getROI(), it.getPathClass(), it.getMeasurementList())

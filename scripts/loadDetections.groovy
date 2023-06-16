@@ -1,17 +1,18 @@
 import org.apache.commons.io.FilenameUtils
 import static qupath.lib.scripting.QP.*
+import qupath.lib.gui.dialogs.Dialogs
 
 
 // Get image directory
-def imageDir = new File(project.getImageList()[0].getUris()[0]).getParent()
 def imageName = getCurrentImageData().getServer().getMetadata().getName()
+def imageDir = new File(project.getImageList()[0].getURIs()[0]).getParent()
+def resultsDir = Dialogs.promptForDirectory('Select results directory', new File(imageDir))
 
 // Delete all annotations
 clearAllObjects()
 
 // Load annotations files for current image
 def p = ~/${imageName}.*\.annot/
-def resultsDir = new File(buildFilePath(imageDir+'/Results'))
 resultsDir.eachFileMatch(p) {file ->
     new File(file.path).withObjectInputStream {
         def annotations = it.readObject()
